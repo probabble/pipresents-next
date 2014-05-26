@@ -54,7 +54,7 @@ class PiPresents(object):
 
         # TODO: make this more flexible so that PPresents can be installed directly into python sources
         # get pi presents code directory
-        pp_dir = sys.path(__file__)
+        pp_dir = os.path.dirname(os.path.abspath(__file__))
         self.pp_dir = pp_dir
         
         if not os.path.exists(os.path.join(self.pp_dir, "pipresents.py")):
@@ -62,7 +62,7 @@ class PiPresents(object):
             exit()
 
         #Initialise logging
-        Monitor.log_path = self.pp_dir
+        Monitor.log_path = options.get('log_path', pp_dir)
         self.mon = Monitor()
         self.mon.on()
         if self.options['debug']:
