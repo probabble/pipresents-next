@@ -31,7 +31,10 @@ from pp_utils import Monitor
 from pp_utils import StopWatch
 
 
-class PiPresents:
+class PiPresents(object):
+    """
+    Instantiated from the command line or from a script. Takes care of
+    """
 
     def __init__(self, options):
         
@@ -51,15 +54,15 @@ class PiPresents:
 
         # TODO: make this more flexible so that PPresents can be installed directly into python sources
         # get pi presents code directory
-        pp_dir = sys.path[0]
+        pp_dir = sys.path(__file__)
         self.pp_dir = pp_dir
         
-        if not os.path.exists(pp_dir+"/pipresents.py"):
-            tkMessageBox.showwarning("Pi Presents","Bad Application Directory")
+        if not os.path.exists(os.path.join(self.pp_dir, "pipresents.py")):
+            tkMessageBox.showwarning("Pi Presents", "Bad Application Directory")
             exit()
 
         #Initialise logging
-        Monitor.log_path = pp_dir
+        Monitor.log_path = self.pp_dir
         self.mon = Monitor()
         self.mon.on()
         if self.options['debug']:
@@ -68,8 +71,8 @@ class PiPresents:
             Monitor.global_enable = False
  
         self.mon.log(self, "Pi Presents is starting")
-        self.mon.log(self, " OS and separator:" + os.name + '  ' + os.sep)
-        self.mon.log(self, "sys.path[0] -  location of code: " + sys.path[0])
+        self.mon.log(self, "OS and separator:" + os.name + '  ' + os.sep)
+        self.mon.log(self, "sys.path[0] - location of code: " + sys.path[0])
         # self.mon.log(self,"os.getenv('HOME') -  user home directory (not used): " + os.getenv('HOME'))
         # self.mon.log(self,"os.path.expanduser('~') -  user home directory: " + os.path.expanduser('~'))
 
@@ -78,13 +81,13 @@ class PiPresents:
         self.tod = None
          
         #get profile path from -p option
-        if self.options['profile'] <> "":
-            self.pp_profile_path = "/pp_profiles/"+self.options['profile']
+        if self.options['profile']:
+            self.pp_profile_path = os.path.join("pp_profiles", self.options['profile'])
         else:
-            self.pp_profile_path = "/pp_profiles/pp_profile"
+            self.pp_profile_path = os.path.join("pp_profiles", "pp_profile")
         
        #get directory containing pp_home from the command,
-        if self.options['home'] == "":
+        if not self.options['home']:
             home = os.path.join(os.path.expanduser('~'), "pp_home")
         else:
             home = os.path.join(self.options['home'], "pp_home")
@@ -109,12 +112,12 @@ class PiPresents:
             self.mon.log(self, "FAILED to find requested home directory, using default to display error message: " + self.pp_home)
 
         #check profile exists, if not default to error profile inside pipresents
-        self.pp_profile=self.pp_home+self.pp_profile_path
+        self.pp_profile = self.pp_home+self.pp_profile_path
         if os.path.exists(self.pp_profile):
-            self.mon.log(self,"Found Requested profile - pp_profile directory is: " + self.pp_profile)
+            self.mon.log(self, "Found Requested profile - pp_profile directory is: " + self.pp_profile)
         else:
             self.pp_profile=pp_dir+"/pp_home/pp_profiles/pp_profile"   
-            self.mon.log(self,"FAILED to find requested profile, using default to display error message: pp_profile")
+            self.mon.log(self, "FAILED to find requested profile, using default to display error message: pp_profile")
         
         if self.options['verify']:
             val = Validator()
@@ -139,7 +142,7 @@ class PiPresents:
 
         # check profile and Pi Presents issues are compatible
         if float(self.showlist.sissue()) != float(self.pipresents_issue):
-            self.mon.err(self, "Version of profile " + self.showlist.sissue() + " is not  same as Pi Presents, must exit")
+            self.mon.err(self, "Version of profile {0} is not same as Pi Presents, must exit".format(self.showlist.sissue()))
             self.end('error', 'wrong version of profile')
  
         # get the 'start' show from the showlist
@@ -260,7 +263,7 @@ class PiPresents:
 
         #kick off the time of day scheduler
         self.tod = TimeOfDay()
-        self.tod.init(pp_dir,self.pp_home,self.canvas,500)
+        self.tod.init(pp_dir, self.pp_home, self.canvas, 500)
         self.tod.poll()
 
         # Create list of start shows initialise them and then run them
@@ -356,7 +359,8 @@ class PiPresents:
 # Ending Pi Presents after all the showers and players are closed
 # **************************
 
-    def end(self,reason,message):
+    def end(self, reason, message):
+
         self.mon.log(self, "Pi Presents ending with message: " + reason + ' ' + message)
         if reason == 'error':
             self.tidy_up()
@@ -375,8 +379,10 @@ class PiPresents:
             else:
                 exit()
 
-    # tidy up all the peripheral bits of Pi Presents
     def tidy_up(self):
+        """
+        tidy up all the peripheral bits of Pi Presents
+        """
         #turn screen blanking back on
         if self.options['noblank']:
             call(["xset", "s", "on"])

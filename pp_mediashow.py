@@ -17,127 +17,118 @@ from pp_resourcereader import ResourceReader
 from pp_controlsmanager import ControlsManager
 from pp_timeofday import TimeOfDay
 
-class MediaShow:
-
+class MediaShow(object):
 
 # *******************
 # External interface
 # ********************
 
-    def __init__(self,
-                            show_params,
-                             root,
-                            canvas,
-                            showlist,
-                            pp_dir,
-                            pp_home,
-                            pp_profile):
+    def __init__(self, show_params, root, canvas, showlist, pp_dir, pp_home, pp_profile):
         """ canvas - the canvas that the menu is to be written on
             show - the dictionary fo the show to be played
             pp_home - Pi presents data_home directory
             pp_profile - Pi presents profile directory
         """
 
-        self.mon=Monitor()
+        self.mon = Monitor()
         self.mon.on()
         
         #instantiate arguments
-        self.show_params =show_params
-        self.showlist=showlist
-        self.root=root
-        self.canvas=canvas
-        self.pp_dir=pp_dir
-        self.pp_home=pp_home
-        self.pp_profile=pp_profile
+        self.show_params = show_params
+        self.showlist = showlist
+        self.root = root
+        self.canvas = canvas
+        self.pp_dir = pp_dir
+        self.pp_home = pp_home
+        self.pp_profile = pp_profile
 
         # open resources
-        self.rr=ResourceReader()
+        self.rr = ResourceReader()
 
         # Init variables
-        self.player=None
-        self.shower=None
-        self.poll_for_interval_timer=None
-        self.poll_for_continue_timer=None
-        self.waiting_for_interval=False
-        self.interval_timer=None
-        self.duration_timer=None
-        self.error=False
+        self.player = None
+        self.shower = None
+        self.poll_for_interval_timer = None
+        self.poll_for_continue_timer = None
+        self.waiting_for_interval = False
+        self.interval_timer = None
+        self.duration_timer = None
+        self.error = False
         
-        self.interval_timer_signal=False
-        self.end_trigger_signal=False
-        self.end_mediashow_signal=False
-        self.next_track_signal=False
-        self.previous_track_signal=False
+        self.interval_timer_signal = False
+        self.end_trigger_signal = False
+        self.end_mediashow_signal = False
+        self.next_track_signal = False
+        self.previous_track_signal = False
         self.play_child_signal = False
-        self.req_next='nil'
+        self.req_next = 'nil'
 
         #create and instance of TimeOfDay scheduler so we can add events
-        self.tod=TimeOfDay()
+        self.tod = TimeOfDay()
 
-        self.state='closed'
+        self.state = 'closed'
 
-
-    def play(self,show_id,end_callback,show_ready_callback, top=False,command='nil'):
-
-        """ displays the mediashow
-              end_callback - function to be called when the menu exits
-              ready_callback - callback when menu is ready to display (not used)
-              top is True when the show is top level (run from [start])
+    def play(self, show_id, end_callback, show_ready_callback, top=False, command='nil'):
+        """
+        displays the mediashow
+        ::param show_id: the id of the show
+        ::param end_callback: function to be called when the menu exits
+        ::param show_ready_callback: callback when menu is ready to display (not used)
+        ::param top: is True when the show is top level (run from [start])
+        ::param command: defaults to 'nil'
         """
 
         #instantiate the arguments
-        self.show_id=show_id
-        self.end_callback=end_callback
-        self.show_ready_callback=show_ready_callback
-        self.top=top
-        self.command=command
-        self.mon.log(self,self.show_params['show-ref']+ ' '+ str(self.show_id)+ ": Starting show")
+        self.show_id = show_id
+        self.end_callback = end_callback
+        self.show_ready_callback = show_ready_callback
+        self.top = top
+        self.command = command
+        self.mon.log(self, self.show_params['show-ref']+ ' ' + str(self.show_id) + ": Starting show")
 
-        # check  data files are available.
-        self.media_file = self.pp_profile + "/" + self.show_params['medialist']
+        # check data files are available.
+        self.media_file = os.path.join(self.pp_profile, self.show_params['medialist'])
         if not os.path.exists(self.media_file):
-            self.mon.err(self,"Medialist file not found: "+ self.media_file)
-            self.end('error',"Medialist file not found")
-
+            self.mon.err(self, "Medialist file not found: " + self.media_file)
+            self.end('error', "Medialist file not found")
 
         #create a medialist for the mediashow and read it.
-        self.medialist=MediaList()
-        if self.medialist.open_list(self.media_file,self.showlist.sissue())==False:
-            self.mon.err(self,"Version of medialist different to Pi Presents")
-            self.end('error',"Version of medialist different to Pi Presents")
+        self.medialist = MediaList()
+        if not self.medialist.open_list(self.media_file,self.showlist.sissue()):
+            self.mon.err(self, "Version of medialist different to Pi Presents")
+            self.end('error', "Version of medialist different to Pi Presents")
 
         #get controls for this show if top level
-        controlsmanager=ControlsManager()
-        if self.top==True:
-            self.controls_list=controlsmanager.default_controls()
+        controlsmanager = ControlsManager()
+        if self.top:
+            self.controls_list = controlsmanager.default_controls()
             # and merge in controls from profile
-            self.controls_list=controlsmanager.merge_show_controls(self.controls_list,self.show_params['controls'])
-
+            self.controls_list = controlsmanager.merge_show_controls(self.controls_list,self.show_params['controls'])
 
         #set up the time of day triggers for the show
-        if self.show_params['trigger']in('time','time-quiet'):
-            error_text=self.tod.add_times(self.show_params['trigger-input'],id(self),self.tod_start_callback,self.show_params['trigger'])
-            if error_text<>'':
-                self.mon.err(self,error_text)
-                self.end('error',error_text)
+        if self.show_params['trigger'] in ('time', 'time-quiet'):
+            error_text = self.tod.add_times(self.show_params['trigger-input'], id(self), self.tod_start_callback,
+                                            self.show_params['trigger'])
+            if error_text:
+                self.mon.err(self, error_text)
+                self.end('error', error_text)
 
-        if self.show_params['trigger-end']=='time':
+        if self.show_params['trigger-end'] == 'time':
             # print self.show_params['trigger-end-time']
-            error_text=self.tod.add_times(self.show_params['trigger-end-time'],id(self),self.tod_end_callback,'n/a')
-            if error_text<>'':
-                self.mon.err(self,error_text)
-                self.end('error',error_text)
+            error_text = self.tod.add_times(self.show_params['trigger-end-time'],id(self),self.tod_end_callback,'n/a')
+            if error_text:
+                self.mon.err(self, error_text)
+                self.end('error', error_text)
                 
-        if self.show_params['trigger-end']=='duration':
-            error_text=self.calculate_duration(self.show_params['trigger-end-time'])
-            if error_text<>'':
-                self.mon.err(self,error_text)
-                self.end('error',error_text)
+        if self.show_params['trigger-end'] == 'duration':
+            error_text = self.calculate_duration(self.show_params['trigger-end-time'])
+            if error_text:
+                self.mon.err(self, error_text)
+                self.end('error', error_text)
                 
-        self.state='closed'
-        self.egg_timer=None
+        self.state = 'closed'
+        self.egg_timer = None
         self.wait_for_trigger()
-
 
 # ********************************
 # Respond to external events
@@ -146,204 +137,191 @@ class MediaShow:
     #stop received from another concurrent show
     def managed_stop(self):
            # if next lower show is running pass down to stop the show and lower level
-            if self.shower<>None:
+            if self.shower:
                 self.shower.managed_stop()
             else:
                 #stop the show if not at top
-                self.end_mediashow_signal=True
+                self.end_mediashow_signal = True
                 # and if track is runing stop that first
-                if self.player<>None:
+                if self.player:
                     self.player.input_pressed('stop')
 
     # kill or error
     def terminate(self,reason):
-        if self.shower<>None:
+        if self.shower:
             self.shower.terminate(reason)
-        elif self.player<>None:
+        elif self.player:
             self.player.terminate(reason)
         else:
-            self.end(reason,' terminated with no shower or player to terminate')
-
-
+            self.end(reason, ' terminated with no shower or player to terminate')
    
    # respond to input events
     def input_pressed(self,symbol,edge,source):
         self.mon.log(self, self.show_params['show-ref']+ ' '+ str(self.show_id)+": received input: " + symbol)
 
-        
         #  check symbol against mediashow triggers, triggers can be used at top or lower level
         # and not affected by disable-controls
 
-        if self.state=='waiting' and self.show_params['trigger'] in ('input','input-quiet')and symbol == self.show_params['trigger-input']:
+        if self.state == 'waiting' and self.show_params['trigger'] in ('input', 'input-quiet') and symbol == self.show_params['trigger-input']:
             self.start_show()
-        elif self.state=='playing' and self.show_params['trigger-next']=='input' and symbol == self.show_params['next-input']:
+        elif self.state == 'playing' and self.show_params['trigger-next'] == 'input' and symbol == self.show_params['next-input']:
             self.next()
 
        # internal functions are triggered only when disable-controls is  'no'
-        if self.show_params['disable-controls']=='yes':
+        if self.show_params['disable-controls'] == 'yes':
             return
 
         # if at top convert symbolic name to operation otherwise lower down we have received an operation
         # look through list of standard symbols to find match (symbolic-name, function name) operation =lookup (symbol
-        if self.top==True:
-            operation=self.lookup_control(symbol,self.controls_list)
+        if self.top:
+            operation = self.lookup_control(symbol, self.controls_list)
         else:
-            operation=symbol
-            
-   
+            operation = symbol
+
         # print 'operation',operation
-        self.do_operation(operation,edge,source)
+        self.do_operation(operation, edge, source)
 
 
     #service the standard inputs for this show
-    def do_operation(self,operation,edge,source):
-        if self.shower<>None:
+    def do_operation(self, operation, edge, source):
+        if self.shower:
             # if next lower show is running pass down to stop the show and lower level
-            self.shower.input_pressed(operation,edge,source) 
+            self.shower.input_pressed(operation, edge, source)
         else:        
             # control this show and its tracks
             # print 'operation',operation
-            if operation=='stop':
-                if self.top == False:
+            if operation == 'stop':
+                if not self.top:
                     # not at top so stop the current show 
-                    self.end_mediashow_signal=True
+                    self.end_mediashow_signal = True
                     # and if a track is running stop that first
-                    if self.player<>None:
+                    if self.player:
                         self.player.input_pressed('stop')
                 else:
                     # top = True, just stop track if running
-                    if self.player<>None:
+                    if self.player:
                         self.player.input_pressed('stop')
 
-            elif operation in ('up','down'):
+            elif operation in ('up', 'down'):
                 #if playing rather than waiting use keys for next or previous
-                if operation=='up' and self.state=='playing':
+                if operation == 'up' and self.state == 'playing':
                     self.previous()
                 else:
                     self.next()
 
-            elif operation=='play':
+            elif operation == 'play':
                 # use 'play' to start child if state=playing or to trigger the show if waiting for trigger
-                if self.state=='playing':
-                    if self.show_params['has-child']=='yes':
-                        self.play_child_signal=True
-                        self.child_track_ref='pp-child-show'
+                if self.state == 'playing':
+                    if self.show_params['has-child'] == 'yes':
+                        self.play_child_signal = True
+                        self.child_track_ref = 'pp-child-show'
                         # and stop the current track if its running
-                        if self.player<>None:
+                        if self.player:
                             self.player.input_pressed('stop')
                 else:
-                    if self.state=='waiting':
+                    if self.state == 'waiting':
                         self.start_show()
 
             elif operation == 'pause':
-                if self.player<>None:
+                if self.player:
                     self.player.input_pressed(operation)
                     
             #if the operation is omxplayer or mplayer runtime control then pass it to player if running
-            elif operation[0:4]=='omx-' or operation[0:6]=='mplay-'or operation[0:5]=='uzbl-':
-                if self.player<>None:
+            elif operation[0:4] == 'omx-' or operation[0:6] == 'mplay-'or operation[0:5] == 'uzbl-':
+                if self.player:
                     self.player.input_pressed(operation)
 
-
-
-    def lookup_control(self,symbol,controls_list):
+    def lookup_control(self, symbol, controls_list):
         for control in controls_list:
             if symbol == control[0]:
                 return control[1]
         return ''
-
 
 # ***************************
 # Show sequencer
 # ***************************
 
     def end_interval_timer(self):
-        self.interval_timer_signal=True
+        self.interval_timer_signal = True
 
     # callback from time of day scheduler
     def tod_start_callback(self):
-         if self.state=='waiting' and self.show_params['trigger']in('time','time-quiet'):
+        if self.state == 'waiting' and self.show_params['trigger'] in ('time', 'time-quiet'):
             self.start_show()
 
     def tod_end_callback(self):
-        if self.state=='playing' and self.show_params['trigger-end'] in ('time','duration'):
-            self.end_trigger_signal=True
-            if self.shower<>None:
+        if self.state == 'playing' and self.show_params['trigger-end'] in ('time', 'duration'):
+            self.end_trigger_signal = True
+            if self.shower:
                 self.shower.input_pressed('stop')
-            elif self.player<>None:
+            elif self.player:
                 self.player.input_pressed('stop')
-                
 
     def stop(self,message):
-        self.end_mediashow_signal=True
-        if self.interval_timer<>None:
+        self.end_mediashow_signal = True
+        if self.interval_timer:
             self.canvas.after_cancel(self.interval_timer)
 
-   
     def next(self):
         # stop track if running and set signal
-        self.next_track_signal=True
-        if self.shower<>None:
+        self.next_track_signal = True
+        if self.shower:
             self.shower.input_pressed("stop")
         else:
-            if self.player<>None:
+            if self.player:
                 self.player.input_pressed("stop")
 
     def previous(self):
         self.previous_track_signal=True
-        if self.shower<>None:
+        if self.shower:
             self.shower.input_pressed("stop")
         else:
-            if self.player<>None:
+            if self.player:
                 self.player.input_pressed("stop")
     
         
     # wait for trigger sets the state to waiting so that events can do a start show.    
     def wait_for_trigger(self):
-        self.state='waiting'
-        if self.show_ready_callback<>None:
+        self.state = 'waiting'
+        if self.show_ready_callback:
             self.show_ready_callback()
 
-        self.mon.log(self,self.show_params['show-ref']+ ' '+ str(self.show_id)+ ": Waiting for trigger: "+ self.show_params['trigger'])
+        self.mon.log(self, self.show_params['show-ref']+ ' '+ str(self.show_id)+ ": Waiting for trigger: "+ self.show_params['trigger'])
         
-        if self.show_params['trigger']=="input":
+        if self.show_params['trigger'] == "input":
             # blank screen waiting for trigger if auto, otherwise display something
-            if self.show_params['progress']=="manual":
-                text= self.resource('mediashow','m01')
+            if self.show_params['progress'] == "manual":
+                text = self.resource('mediashow', 'm01')
             else:
-                text= self.resource('mediashow','m02')
-            self.display_message(self.canvas,'text',text,0,self.start_show)
+                text = self.resource('mediashow', 'm02')
+            self.display_message(self.canvas, 'text', text, 0, self.start_show)
 
-
-        elif self.show_params['trigger']=="input-quiet":
+        elif self.show_params['trigger'] == "input-quiet":
             # blank screen waiting for trigger
-            text = self.resource('mediashow','m10')
-            self.display_message(self.canvas,'text',text,0,self.start_show)
+            text = self.resource('mediashow', 'm10')
+            self.display_message(self.canvas, 'text', text, 0, self.start_show)
             pass
 
-        elif self.show_params['trigger'] in ('time','time-quiet'):
+        elif self.show_params['trigger'] in ('time', 'time-quiet'):
             # show next show notice
-            quiet=3
+            quiet = 3
             # if next show is this one display text
-            next_show=self.tod.next_event_time()
-            if next_show[quiet]==False:
-                if next_show[1]=='tomorrow':
-                    text = self.resource('mediashow','m09')
+            next_show = self.tod.next_event_time()
+            if next_show[quiet] == False:
+                if next_show[1] == 'tomorrow':
+                    text = self.resource('mediashow', 'm09')
                 else:
-                    text = self.resource('mediashow','m08')                     
+                    text = self.resource('mediashow', 'm08')
                 text=text.replace('%tt',next_show[0])
                 self.display_message(self.canvas,'text',text,0,self.start_show)  
             
-        elif self.show_params['trigger']=="start":
+        elif self.show_params['trigger'] == "start":
             self.start_show()
             
         else:
             self.mon.err(self,"Unknown trigger: "+ self.show_params['trigger'])
             self.end('error',"Unknown trigger type")
 
-
-
-  
     def start_show(self):
         self.state='playing'
         self.direction='forward'
@@ -368,11 +346,12 @@ class MediaShow:
  
     def what_next(self):
         self.direction='forward'
+        ordered = self.show_params['sequence'] == "ordered"
 
         # end of show trigger caused by tod
-        if self.end_trigger_signal==True:
+        if self.end_trigger_signal:
             self.end_trigger_signal=False
-            if self.top==True:
+            if self.top:
                 self.state='waiting'
                 self.wait_for_trigger()
             else:
@@ -381,7 +360,7 @@ class MediaShow:
         
         # user wants to end, wait for any shows or tracks to have ended then end show
         # probalby will get here with end_m set when player and shower has finished
-        elif self.end_mediashow_signal==True:
+        elif self.end_mediashow_signal:
             if self.player==None and self.shower==None:
                 self.end_mediashow_signal=False
                 self.end('normal',"show ended by user")
@@ -414,12 +393,12 @@ class MediaShow:
                 self.end('error',"child show not found in medialist")
         
         # skip to next track on user input
-        elif self.next_track_signal==True:
+        elif self.next_track_signal:
             self.next_track_signal=False
-            if self.medialist.at_end()==True:
-                if  self.show_params['sequence']=="ordered" and self.show_params['repeat']=='oneshot' and self.top==False:
+            if self.medialist.at_end():
+                if ordered and self.show_params['repeat']=='oneshot' and not self.top:
                     self.end('do-next',"Return from Sub Show")
-                elif  self.show_params['sequence']=="ordered" and self.show_params['repeat']=='single-run' and self.top==False:
+                elif ordered and self.show_params['repeat']=='single-run' and not self.top:
                     self.end('do-next',"Return from Sub Show")
                 else:
                     self.medialist.next(self.show_params['sequence'])
@@ -429,13 +408,13 @@ class MediaShow:
                 self.play_selected_track(self.medialist.selected_track())
                 
         # skip to previous track on user input
-        elif self.previous_track_signal==True:
+        elif self.previous_track_signal:
             self.previous_track_signal=False
             self.direction='backward'
-            if self.medialist.at_start()==True:
-                if  self.show_params['sequence']=="ordered" and self.show_params['repeat']=='oneshot' and self.top==False:
+            if self.medialist.at_start():
+                if ordered and self.show_params['repeat']=='oneshot' and not self.top:
                     self.end('do-previous',"Return from Sub Show")
-                elif  self.show_params['sequence']=="ordered" and self.show_params['repeat']=='single-run' and self.top==False:
+                elif ordered and self.show_params['repeat']=='single-run' and not self.top:
                     self.end('do-previous',"Return from Sub Show")
                 else:
                     self.medialist.previous(self.show_params['sequence'])
@@ -443,37 +422,35 @@ class MediaShow:
             else:
                 self.medialist.previous(self.show_params['sequence'])              
                 self.play_selected_track(self.medialist.selected_track())
-        
 
         # track is finished and we are on auto        
         elif self.show_params['progress']=="auto":
             
-            if self.medialist.at_end()==True:
-
+            if self.medialist.at_end():
                 # oneshot
-                if self.show_params['sequence']=="ordered" and self.show_params['repeat']=='oneshot' and self.top==False:
+                if ordered and self.show_params['repeat']=='oneshot' and not self.top:
                     self.end('normal',"End of Oneshot in subshow")
                     
-                elif self.show_params['sequence']=="ordered" and self.show_params['repeat']=='oneshot' and self.top==True:
+                elif ordered and self.show_params['repeat']=='oneshot' and self.top:
                     self.wait_for_trigger()
 
                 # single run
-                elif self.show_params['sequence']=="ordered" and self.show_params['repeat']=='single-run' and self.top==True:
+                elif ordered and self.show_params['repeat']=='single-run' and self.top:
                    self.end('normal',"End of Single Run")
 
-                elif self.show_params['sequence']=="ordered" and self.show_params['repeat']=='single-run' and self.top==False:
+                elif ordered and self.show_params['repeat']=='single-run' and not self.top:
                    self.end('do-next',"End of single run - Return from Sub Show")
 
                 # repeating and waiting to restart 
-                elif self.waiting_for_interval==True:
-                    if self.interval_timer_signal==True:
+                elif self.waiting_for_interval:
+                    if self.interval_timer_signal:
                         self.interval_timer_signal=False
                         self.waiting_for_interval=False
                         self.start_show()
                     else:
                         self.poll_for_interval_timer=self.canvas.after(1000,self.what_next)
  
-                elif self.show_params['sequence']=="ordered" and self.show_params['repeat']=='interval' and int(self.show_params['repeat-interval'])>0:
+                elif ordered and self.show_params['repeat']=='interval' and int(self.show_params['repeat-interval'])>0:
                     self.waiting_for_interval=True
                     self.poll_for_interval_timer=self.canvas.after(1000,self.what_next) 
                     
@@ -565,10 +542,7 @@ class MediaShow:
                                         self.end_player,
                                         self.ready_callback,
                                         enable_menu=self.enable_child)
-  
 
-
- 
         elif track_type=="image":
             track_file=self.complete_path(selected_track)
             # images played from menus don't have children
@@ -601,15 +575,9 @@ class MediaShow:
                 self.mon.err(self,"Show not found in showlist: "+ selected_track['sub-show'])
                 self.end('error',"Unknown show")
                 
-            if selected_show['type']=="mediashow":    
-                self.shower= MediaShow(selected_show,
-                                                               self.root,
-                                                                self.canvas,
-                                                                self.showlist,
-                                                               self.pp_dir,
-                                                                self.pp_home,
-                                                                self.pp_profile)
-                self.shower.play(self.show_id,self.end_shower,self.ready_callback,top=False,command=self.direction)
+            if selected_show['type'] == "mediashow":
+                self.shower = MediaShow(selected_show, self.root, self.canvas, self.showlist, self.pp_dir, self.pp_home, self.pp_profile)
+                self.shower.play(self.show_id, self.end_shower, self.ready_callback, top=False, command=self.direction)
 
             elif selected_show['type']=="liveshow":    
                 self.shower= LiveShow(selected_show,
@@ -642,7 +610,7 @@ class MediaShow:
                 self.shower.play(self.show_id,self.end_shower,self.ready_callback,top=False,command='nil')
             
             elif selected_show['type']=="menu":
-                self.shower= MenuShow(selected_show,
+                self.shower = MenuShow(selected_show,
                                                         self.root,
                                                         self.canvas,
                                                         self.showlist,
@@ -693,7 +661,6 @@ class MediaShow:
                 self.what_next() 
 
 
-
 # ***************************
 # end of show 
 # ***************************
@@ -703,7 +670,7 @@ class MediaShow:
         self.mon.log(self,self.show_params['show-ref']+ ' '+ str(self.show_id)+ ": Ending Mediashow")
         self.tidy_up()
         self.end_callback(self.show_id,reason,message)
-        self=None
+        self = None
         return
 
     def tidy_up(self):
@@ -785,7 +752,7 @@ class MediaShow:
 
     def resource(self,section,item):
         value=self.rr.get(section,item)
-        if value==False:
+        if not value:
             self.mon.err(self, "resource: "+section +': '+ item + " not found" )
             self.terminate("error")
         else:
