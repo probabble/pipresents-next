@@ -33,7 +33,7 @@ from pp_utils import StopWatch
 
 class PiPresents:
 
-    def __init__(self):
+    def __init__(self, options):
         
         self.pipresents_issue="1.2"
         self.nonfull_window_width = 0.6 # proportion of width
@@ -422,7 +422,7 @@ class PiPresents:
           
 if __name__ == '__main__':
 
-    pp = PiPresents()
+    pp = PiPresents(command_options())
     #try:
         #pp = PiPresents()
     #except:
