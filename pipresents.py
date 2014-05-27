@@ -80,20 +80,20 @@ class PiPresents(object):
         self.ppio = None
         self.tod = None
          
-        #get profile path from -p option
+        # get profile path from -p option
         if self.options['profile']:
             self.pp_profile_path = os.path.join("pp_profiles", self.options['profile'])
         else:
             self.pp_profile_path = os.path.join("pp_profiles", "pp_profile")
         
-       #get directory containing pp_home from the command,
+       # get directory containing pp_home from the command,
         if not self.options['home']:
             home = os.path.join(os.path.expanduser('~'), "pp_home")
         else:
             home = os.path.join(self.options['home'], "pp_home")
         self.mon.log(self, "pp_home directory is: " + home)
         
-        #check if pp_home exists.
+        # check if pp_home exists.
         # try for 10 seconds to allow usb stick to automount
         # fall back to pipresents/pp_home
         self.pp_home = os.path.join(pp_dir, "pp_home")
@@ -112,11 +112,11 @@ class PiPresents(object):
             self.mon.log(self, "FAILED to find requested home directory, using default to display error message: " + self.pp_home)
 
         #check profile exists, if not default to error profile inside pipresents
-        self.pp_profile = self.pp_home+self.pp_profile_path
+        self.pp_profile = os.path.join(self.pp_home, self.pp_profile_path)
         if os.path.exists(self.pp_profile):
             self.mon.log(self, "Found Requested profile - pp_profile directory is: " + self.pp_profile)
         else:
-            self.pp_profile=pp_dir+"/pp_home/pp_profiles/pp_profile"   
+            self.pp_profile = os.path.join(pp_dir, 'pp_home', 'pp_profiles', 'pp_profile')
             self.mon.log(self, "FAILED to find requested profile, using default to display error message: pp_profile")
         
         if self.options['verify']:
